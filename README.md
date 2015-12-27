@@ -38,10 +38,10 @@ http://localhost:7878/search2steps?q0=Brest&q=Rue+du+Restic&limit=5
 Load the plugin in Addok config file:
 ```python
 import re
+import sys
+sys.path.append('/srv/addok/addok') # abs path to config file directory
 
 def ON_LOAD():
-  import sys
-  sys.path.append('/srv/addok/addok') # abs path to config file directory
   import search2steps
 ```
 
@@ -83,7 +83,7 @@ SEARCH_2_STEPS_STEP1_LIMIT = 10
 ```
 
 ### Pivot
-Then specify witch field would be extract from step one and use as filter on step two:
+Then specify which field would be extract from step one and use as filter on step two:
 ```python
 SEARCH_2_STEPS_PIVOT_FILTER = 'citycode'
 ```
