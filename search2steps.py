@@ -15,7 +15,7 @@ def search2steps(config, query1, query2, autocomplete, limit, **filters):
     # Run step 1 query
     results = search2steps_step1(config, query1, config.SEARCH_2_STEPS_STEP1_LIMIT, **filters)
     if not query2:
-        return results
+        return results[0:limit]
 
     if results:
         params_steps_2 = []
