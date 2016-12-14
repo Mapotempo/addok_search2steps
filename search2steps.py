@@ -17,6 +17,7 @@ def search2steps(config, query1, query2, autocomplete, limit, **filters):
     if not query2:
         return results[0:limit]
 
+    ret = []
     if results:
         params_steps_2 = []
         # Collect step 1 results
@@ -35,7 +36,7 @@ def search2steps(config, query1, query2, autocomplete, limit, **filters):
 
         # Make results uniq
         params_steps_2 = set(params_steps_2)
-        ret = []
+
         # Run steps 2 queries
         for join_value, query_step_1 in params_steps_2:
             # Set step 2 query filter from step 1 result
@@ -55,16 +56,26 @@ def search2steps(config, query1, query2, autocomplete, limit, **filters):
                 if result.score > config.SEARCH_2_STEPS_STEP2_THRESHOLD:
                     ret.append(result)
 
-        if ret:
-            # Sort and limit results for all queries
-            return sorted(ret, key=lambda k: k.score, reverse=True)[0:limit]
-
-    # Can't run steps 2, run a classic plain text search
     results = search(query2 + ' ' + query1, limit=limit, autocomplete=autocomplete, **filters)
     for result in results:
         # Lower the score
         result.score *= config.SEARCH_2_STEPS_STEP1_THRESHOLD
-    return results
+
+        ret.append(result)
+
+    if ret:
+        # Sort and limit results for all queries
+        ret = sorted(ret, key=lambda k: k.score, reverse=True)[0:limit]
+        # Make result uniq
+        ids = []
+        uniq = []
+        for e in ret:
+            if e.id not in ids:
+                uniq.append(e)
+                ids.append(e.id)
+        return uniq
+    else:
+        return []
 
 class Search2Steps(View):
 
