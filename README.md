@@ -27,7 +27,7 @@ Rue Beau Site 35610 Sains
 
 Use as normal Addok search query, with required `q` and other `limit`, `autocomplete`, etc, including filters.
 
-Search2steps introduce a new required parameter: `q0` for preliminary search.
+Search2steps introduce a new parameter: `q0` for preliminary search.
 
 ```
 http://localhost:7878/search2steps?q0=Brest&q=Rue+du+Restic&limit=5
@@ -57,11 +57,12 @@ API_ENDPOINTS = [
 
 Configure the plugin:
 ```python
-SEARCH_2_STEPS_STEP1_TYPE = 'city'
+SEARCH_2_STEPS_STEP1_TYPES = ['city', 'locality']
 SEARCH_2_STEPS_STEP1_THRESHOLD = 0.5
 SEARCH_2_STEPS_STEP1_LIMIT = 10
 SEARCH_2_STEPS_PIVOT_FILTER = 'citycode'
 SEARCH_2_STEPS_PIVOT_REWRITE = 'city'
+SEARCH_2_STEPS_STEP2_TYPE = 'housenumber'
 SEARCH_2_STEPS_STEP2_THRESHOLD = 0.2
 ```
 
@@ -74,11 +75,12 @@ Search in addok in two steps by:
 ### Step one
 Configuration must specify the type of object looked for in this step, it's used as filter in step one.
 ```python
-SEARCH_2_STEPS_STEP1_TYPE = 'city'
+SEARCH_2_STEPS_STEP1_TYPES = ['city', 'locality']
 ```
 Only result with score above the threshold and under this limit will remain available for next step:
 ```python
 SEARCH_2_STEPS_STEP1_THRESHOLD = 0.5
+SEARCH_2_STEPS_STEP2_TYPE = 'housenumber'
 SEARCH_2_STEPS_STEP1_LIMIT = 10
 ```
 
@@ -124,4 +126,18 @@ query:
     q="Bordeaux Rue des lilas" citycode=33063 limit 1
     q="Bordeaux-Saint-Clair Rue des lilas" citycode=76117 limit 1
     q="Lignan-de-Bordeaux Rue des lilas" citycode=33245 limit 1
+```
+
+## Bonus
+The street can be a list of possible candidates when come from a loseley casted address.
+```
+street? App 6
+street? Rue Beau Rosier
+postcode: 33000
+city: Bordeaux
+```
+
+Separate possible alternate street names with a pipe `|`:
+```
+q0=33000+Bordeaux&q=App+6|Rue+Beau+Rosier
 ```
