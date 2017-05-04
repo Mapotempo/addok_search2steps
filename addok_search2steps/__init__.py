@@ -1,8 +1,34 @@
-from werkzeug.wrappers import Response
-from werkzeug.exceptions import BadRequest
-from addok.server import View, BaseCSV, log_query, log_notfound
+import falcon
+from falcon_multipart.middleware import MultipartMiddleware
+
+from addok.config import config
 from addok.core import search
+from addok.helpers.text import EntityTooLarge
+
+from addok_csv import View, BaseCSV, log_query, log_notfound
 import itertools
+
+
+def register_http_middleware(middlewares):
+    middlewares.append(MultipartMiddleware())
+
+
+def register_http_endpoint(api):
+    api.add_route('/search2steps', Search2Steps())
+    api.add_route('/search2steps/csv', CSVSearch2steps())
+
+
+def preconfigure(config):
+    config.SEARCH_2_STEPS_STEP1_TYPES = ['municipality', 'locality']
+    config.SEARCH_2_STEPS_STEP1_THRESHOLD = 0.5
+    config.SEARCH_2_STEPS_STEP1_LIMIT = 10
+
+    config.SEARCH_2_STEPS_PIVOT_FILTER = 'citycode'
+    config.SEARCH_2_STEPS_PIVOT_REWRITE = 'municipality'
+
+    config.SEARCH_2_STEPS_STEP2_TYPE = 'housenumber'
+    config.SEARCH_2_STEPS_STEP2_THRESHOLD = 0.2
+
 
 def multiple_search(queries, **args):
     if len(queries) > 0:
@@ -17,6 +43,7 @@ def search2steps_step1(config, query1, limit, **filters):
         filters_step_1['type'] = type
         ret += search(query1, limit=limit, autocomplete=False, **filters_step_1)
     return sorted(ret, key=lambda k: k.score, reverse=True)[0:limit]
+
 
 def search2steps(config, query1, queries2, autocomplete, limit, **filters):
     # Fetch the join value
@@ -88,114 +115,97 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
     else:
         return results1[0:limit]
 
+
 class Search2Steps(View):
 
-    endpoint = 'search2steps'
-
-    def get(self):
-        q0 = self.request.args.get('q0')
+    def on_get(self, req, resp, **kwargs):
+        q0 = req.get_param('q0')
         q0 = q0.split('|') if q0 else []
-        q = self.request.args.get('q')
+        q = req.get_param('q')
         q = q.split('|') if q else []
         if not q and not q0:
-            return Response('Missing query', status=400)
-
-        try:
-            limit = int(self.request.args.get('limit'))
-        except (ValueError, TypeError):
-            limit = 5
-        try:
-            autocomplete = int(self.request.args.get('autocomplete')) == 1
-        except (ValueError, TypeError):
+            raise falcon.HTTPBadRequest('Missing query', 'Missing query')
+        limit = req.get_param_as_int('limit') or 5  # use config
+        autocomplete = req.get_param_as_bool('autocomplete')
+        if autocomplete is None:
+            # Default is True.
+            # https://github.com/falconry/falcon/pull/493#discussion_r44376219
             autocomplete = True
-        try:
-            lat = float(self.request.args.get('lat'))
-            lon = float(self.request.args.get('lon',
-                        self.request.args.get('lng',
-                        self.request.args.get('long'))))
-            center = [lat, lon]
-        except (ValueError, TypeError):
-            lat = None
-            lon = None
-            center = None
-        filters = self.match_filters()
+        lon, lat = self.parse_lon_lat(req)
+        center = None
+        if lon and lat:
+            center = (lon, lat)
+        filters = self.match_filters(req)
 
-        if len(q0) == 0:
-            results = multiple_search(q, limit=limit, autocomplete=False, lat=lat, lon=lon, **filters)
-            query = '|'.join(q)
-            if not results:
-                log_notfound(query)
-            log_query(query, results)
-            return self.to_geojson(results, query=query, filters=filters, center=center, limit=limit)
-        else:
-            results = search2steps(self.config, q0[0], q, autocomplete=autocomplete, limit=limit, lat=lat, lon=lon, **filters)
-            query = '|'.join(q0) + ' ' + ('|').join(q)
-            if not results:
-                log_notfound(query)
-            log_query(query, results)
-            return self.to_geojson(results, query=query, filters=filters, center=center, limit=limit)
+        try:
+            if len(q0) == 0:
+                results = multiple_search(q, limit=limit, autocomplete=False, lat=lat, lon=lon, **filters)
+                query = '|'.join(q)
+            else:
+                results = search2steps(self.config, q0[0], q, autocomplete=autocomplete, limit=limit, lat=lat, lon=lon, **filters)
+                query = '|'.join(q0) + ' ' + ('|').join(q)
+        except EntityTooLarge as e:
+            raise falcon.HTTPRequestEntityTooLarge(str(e))
+
+        if not results:
+            log_notfound(query)
+        log_query(query, results)
+        self.to_geojson(req, resp, results, query=query, filters=filters, center=center, limit=limit)
+
 
 class CSVSearch2steps(BaseCSV):
 
-    endpoint = 'search2steps.csv'
     base_headers = ['latitude', 'longitude', 'result_label', 'result_score',
                     'result_type', 'result_id', 'result_housenumber', 'result_citycode']
 
-    def compute_fieldnames(self):
-        super(CSVSearch2steps, self).compute_fieldnames()
-        self.columns0 = self.request.form.getlist('columns0')
+    def compute_fieldnames(self, req, file_, content, rows):
+        fieldnames, columns = super(CSVSearch2steps, self).compute_fieldnames(req, file_, content, rows)
+        self.columns0 = req.get_param_as_list('columns0') or []
         for column in self.columns0:
-            if column not in self.fieldnames:
-                raise BadRequest("Cannot found column '{}' in columns {}".format(column, self.fieldnames))
+            if column not in fieldnames:
+                msg = "Cannot found column '{}' in columns {}".format(column, fieldnames)
+                raise falcon.HTTPBadRequest(msg, msg)
+        return fieldnames, columns
 
-    def process_row(self, row):
+    def process_row(self, req, row, filters, columns):
         row_split = dict([(k, v and v.split('|')) for k, v in row.items()])
         # Generate all combinations
         # We don't want None in a join.
         q0 = list(filter(lambda x: x and x != '', [' '.join([l or '' for l in i]) for i in itertools.product(*[row_split[k] or [None] for k in self.columns0])]))
-        q = list(filter(lambda x: x and x != '', [' '.join([l or '' for l in i]) for i in itertools.product(*[row_split[k] or [None] for k in self.columns])]))
-        filters = self.match_row_filters(row)
-        lat_column = self.request.form.get('lat')
-        lon_column = self.request.form.get('lon')
+        q = list(filter(lambda x: x and x != '', [' '.join([l or '' for l in i]) for i in itertools.product(*[row_split[k] or [None] for k in columns])]))
+        filters = self.match_row_filters(row, filters)
+        lat_column = req.get_param('lat')
+        lon_column = req.get_param('lon')
         if lon_column and lat_column:
             lat = row.get(lat_column)
             lon = row.get(lon_column)
             if lat and lon:
                 filters['lat'] = float(lat)
                 filters['lon'] = float(lon)
-        if len(q0) == 0:
-            results = multiple_search(q, autocomplete=False, limit=1, **filters)
-            log_query('|'.join(q), results)
-            if results:
-                result = results[0]
-                row.update({
-                    'latitude': result.lat,
-                    'longitude': result.lon,
-                    'result_label': str(result),
-                    'result_score': round(result.score, 2),
-                    'result_type': result.type,
-                    'result_id': result.id,
-                    'result_housenumber': result.housenumber,
-                    'result_citycode': result.citycode,
-                })
-                self.add_fields(row, result)
+
+        try:
+            if len(q0) == 0:
+                results = multiple_search(q, autocomplete=False, limit=1, **filters)
+                query = '|'.join(q)
             else:
-                log_notfound('|'.join(q))
+                results = search2steps(self.config, q0[0], q, autocomplete=False, limit=1, **filters)
+                query = '|'.join(q0) + ' ' + ('|').join(q)
+        except EntityTooLarge as e:
+            raise falcon.HTTPRequestEntityTooLarge(str(e))
+
+        log_query(query, results)
+        if results:
+            result = results[0]
+            row.update({
+                'latitude': result.lat,
+                'longitude': result.lon,
+                'result_label': str(result),
+                'result_score': round(result.score, 2),
+                'result_type': result.type,
+                'result_id': result.id,
+                'result_housenumber': result.housenumber,
+                'result_citycode': result.citycode,
+            })
+            self.add_extra_fields(row, result)
         else:
-            results = search2steps(self.config, q0[0], q, autocomplete=False, limit=1, **filters)
-            log_query('|'.join(q0) + ' ' + ('|').join(q), results)
-            if results:
-                result = results[0]
-                row.update({
-                    'latitude': result.lat,
-                    'longitude': result.lon,
-                    'result_label': str(result),
-                    'result_score': round(result.score, 2),
-                    'result_type': result.type,
-                    'result_id': result.id,
-                    'result_housenumber': result.housenumber,
-                    'result_citycode': result.citycode,
-                })
-                self.add_fields(row, result)
-            else:
-                log_notfound('|'.join(q0) + ' ' + ('|').join(q))
+            log_notfound(query)
