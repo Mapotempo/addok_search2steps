@@ -39,12 +39,12 @@ Install the python module, no explicit load is necessary.
 
 The default configuration is:
 ```python
-SEARCH_2_STEPS_STEP1_TYPES = ['municipality', 'locality']
-SEARCH_2_STEPS_STEP1_THRESHOLD = 0.5
+SEARCH_2_STEPS_STEP1_TYPES = ['municipality']
+SEARCH_2_STEPS_STEP1_THRESHOLD = 0.2
 SEARCH_2_STEPS_STEP1_LIMIT = 10
 
 SEARCH_2_STEPS_PIVOT_FILTER = 'citycode'
-SEARCH_2_STEPS_PIVOT_REWRITE = 'municipality'
+SEARCH_2_STEPS_PIVOT_REWRITE = 'name'
 
 SEARCH_2_STEPS_STEP2_TYPE = 'housenumber'
 SEARCH_2_STEPS_STEP2_THRESHOLD = 0.2

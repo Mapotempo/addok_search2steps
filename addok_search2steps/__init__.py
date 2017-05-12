@@ -19,12 +19,12 @@ def register_http_endpoint(api):
 
 
 def preconfigure(config):
-    config.SEARCH_2_STEPS_STEP1_TYPES = ['municipality', 'locality']
-    config.SEARCH_2_STEPS_STEP1_THRESHOLD = 0.5
+    config.SEARCH_2_STEPS_STEP1_TYPES = ['municipality']
+    config.SEARCH_2_STEPS_STEP1_THRESHOLD = 0.2
     config.SEARCH_2_STEPS_STEP1_LIMIT = 10
 
     config.SEARCH_2_STEPS_PIVOT_FILTER = 'citycode'
-    config.SEARCH_2_STEPS_PIVOT_REWRITE = 'municipality'
+    config.SEARCH_2_STEPS_PIVOT_REWRITE = 'name'
 
     config.SEARCH_2_STEPS_STEP2_TYPE = 'housenumber'
     config.SEARCH_2_STEPS_STEP2_THRESHOLD = 0.2
