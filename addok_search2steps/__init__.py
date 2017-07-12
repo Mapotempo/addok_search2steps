@@ -120,10 +120,10 @@ class Search2Steps(View):
 
     def on_get(self, req, resp, **kwargs):
         q0 = req.get_param('q0')
-        q0 = q0.split('|') if q0 else []
+        q0 = q0.split('|') if q0 and len(q0.strip()) > 0 else []
         q = req.get_param('q')
-        q = q.split('|') if q else []
-        if not q and not q0:
+        q = q.split('|') if q and len(q.strip()) > 0 else []
+        if len(q) == 0 and len(q0) == 0:
             raise falcon.HTTPBadRequest('Missing query', 'Missing query')
         limit = req.get_param_as_int('limit') or 5  # use config
         autocomplete = req.get_param_as_bool('autocomplete')
