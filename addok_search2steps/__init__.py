@@ -32,13 +32,7 @@ def preconfigure(config):
 
 def multiple_search(queries, **args):
     if len(queries) > 0:
-        try:
-            return max([search(query, **args) for query in queries], key=lambda x: x and len(x) > 0 and x[0].score or 0)
-        except Exception as e:
-            print(queries)
-            print(args)
-            print(e)
-            raise
+        return max([search(query, **args) for query in queries], key=lambda x: x and len(x) > 0 and x[0].score or 0)
     else:
         return []
 
