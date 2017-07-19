@@ -28,6 +28,7 @@ def preconfigure(config):
 
     config.SEARCH_2_STEPS_STEP2_TYPE = 'housenumber'
     config.SEARCH_2_STEPS_STEP2_THRESHOLD = 0.2
+    config.SEARCH_2_STEPS_STEP2_PENALITY_MULTIPLIER = 0.5
 
 
 def multiple_search(queries, **args):
@@ -52,52 +53,55 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
     # Run step 1 query
     results1 = search2steps_step1(config, query1, config.SEARCH_2_STEPS_STEP1_LIMIT, **filters)
     if len(queries2) == 0:
-        return results1[0:limit]
+        ret = results1[0:limit]
+        results_full = search(query1, limit=limit, autocomplete=autocomplete, **filters)
 
-    ret = []
-    if results1:
-        params_steps_2 = []
-        # Collect step 1 results
-        for result in results1:
-            query_step_1 = result.__getattr__(config.SEARCH_2_STEPS_PIVOT_REWRITE)
+    else:
+        ret = []
+        if results1:
+            params_steps_2 = []
+            # Collect step 1 results
+            for result in results1:
+                query_step_1 = result.__getattr__(config.SEARCH_2_STEPS_PIVOT_REWRITE)
 
-            if config.SEARCH_2_STEPS_PIVOT_FILTER in filters and filters[config.SEARCH_2_STEPS_PIVOT_FILTER]:
-                join_value = filters[config.SEARCH_2_STEPS_PIVOT_FILTER]
-                threshold = 1
-            else:
-                join_value = result.__getattr__(config.SEARCH_2_STEPS_PIVOT_FILTER)
-                threshold = result.score
+                if config.SEARCH_2_STEPS_PIVOT_FILTER in filters and filters[config.SEARCH_2_STEPS_PIVOT_FILTER]:
+                    join_value = filters[config.SEARCH_2_STEPS_PIVOT_FILTER]
+                    threshold = 1
+                else:
+                    join_value = result.__getattr__(config.SEARCH_2_STEPS_PIVOT_FILTER)
+                    threshold = result.score
 
-            if join_value and threshold > config.SEARCH_2_STEPS_STEP1_THRESHOLD:
-                params_steps_2.append((join_value, query_step_1))
+                if join_value and threshold > config.SEARCH_2_STEPS_STEP1_THRESHOLD:
+                    params_steps_2.append((join_value, query_step_1))
 
-        # Make results uniq
-        params_steps_2 = set(params_steps_2)
+            # Make results uniq
+            params_steps_2 = set(params_steps_2)
 
-        # Run steps 2 queries
-        for join_value, query_step_1 in params_steps_2:
-            # Set step 2 query filter from step 1 result
-            filters_step_2 = filters.copy()
-            filters_step_2[config.SEARCH_2_STEPS_PIVOT_FILTER] = join_value
-            filters_step_2['type'] = config.SEARCH_2_STEPS_STEP2_TYPE
-            results_step_2 = multiple_search([q + ' ' + query_step_1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters_step_2)
-            append = False
-            if results_step_2:
-                for result_step_2 in results_step_2:
-                    if result_step_2.score > config.SEARCH_2_STEPS_STEP2_THRESHOLD:
-                        append = True
-                        ret.append(result_step_2)
-            if not append:
-                # No usable result from steps 2, use steps 1 result
-                # Lower the score
-                result.score *= config.SEARCH_2_STEPS_STEP1_THRESHOLD
-                if result.score > config.SEARCH_2_STEPS_STEP2_THRESHOLD:
-                    ret.append(result)
+            # Run steps 2 queries
+            for join_value, query_step_1 in params_steps_2:
+                # Set step 2 query filter from step 1 result
+                filters_step_2 = filters.copy()
+                filters_step_2[config.SEARCH_2_STEPS_PIVOT_FILTER] = join_value
+                filters_step_2['type'] = config.SEARCH_2_STEPS_STEP2_TYPE
+                results_step_2 = multiple_search([q + ' ' + query_step_1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters_step_2)
+                append = False
+                if results_step_2:
+                    for result_step_2 in results_step_2:
+                        if result_step_2.score > config.SEARCH_2_STEPS_STEP2_THRESHOLD:
+                            append = True
+                            ret.append(result_step_2)
+                if not append:
+                    # No usable result from steps 2, use steps 1 result
+                    # Lower the score
+                    result.score *= config.SEARCH_2_STEPS_STEP2_PENALITY_MULTIPLIER
+                    if result.score > config.SEARCH_2_STEPS_STEP2_THRESHOLD:
+                        ret.append(result)
 
-    results_full = multiple_search([q + ' ' + query1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters)
+            results_full = multiple_search([q + ' ' + query1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters)
+
     for result in results_full:
         # Lower the score
-        result.score *= config.SEARCH_2_STEPS_STEP1_THRESHOLD
+        result.score *= config.SEARCH_2_STEPS_STEP2_PENALITY_MULTIPLIER
 
         ret.append(result)
 

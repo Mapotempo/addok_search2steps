@@ -48,6 +48,7 @@ SEARCH_2_STEPS_PIVOT_REWRITE = 'name'
 
 SEARCH_2_STEPS_STEP2_TYPE = 'housenumber'
 SEARCH_2_STEPS_STEP2_THRESHOLD = 0.2
+SEARCH_2_STEPS_STEP2_PENALITY_MULTIPLIER = 0.5
 ```
 
 You can overive it in your configuration file.
@@ -56,8 +57,8 @@ You can overive it in your configuration file.
 ## How it works
 
 Search in addok in two steps by:
-- Search by q0 and extract a selected field
-- Search by q0 + q using the select field as filter
+- Search by q0 and extract the selected pivot
+- Search by q0 + q using the pivot as filter
 
 ### Step one
 Configuration must specify the type of object looked for in this step, it's used as filter in step one.
@@ -89,7 +90,7 @@ SEARCH_2_STEPS_STEP2_THRESHOLD = 0.2
 
 ### Fail safe
 If two steps query fail, a classic q0 + q query is done.
-All result scores are lowered by `SEARCH_2_STEPS_STEP1_THRESHOLD`.
+All result scores are lowered by `SEARCH_2_STEPS_STEP2_PENALITY_MULTIPLIER`.
 
 ## Example
 Initial query:
