@@ -97,7 +97,7 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
                     if result.score > config.SEARCH_2_STEPS_STEP2_THRESHOLD:
                         ret.append(result)
 
-            results_full = multiple_search([q + ' ' + query1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters)
+        results_full = multiple_search([q + ' ' + query1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters)
 
     for result in results_full:
         # Lower the score
