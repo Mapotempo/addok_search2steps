@@ -8,6 +8,7 @@ from addok.helpers.text import EntityTooLarge
 from addok_csv import View, BaseCSV, log_query, log_notfound
 import itertools
 
+import math
 
 def register_http_middleware(middlewares):
     middlewares.append(MultipartMiddleware())
@@ -22,6 +23,7 @@ def preconfigure(config):
     config.SEARCH_2_STEPS_STEP1_TYPES = ['municipality']
     config.SEARCH_2_STEPS_STEP1_THRESHOLD = 0.2
     config.SEARCH_2_STEPS_STEP1_LIMIT = 10
+    config.SEARCH_2_STEPS_STEP2_LIMIT = 10
 
     config.SEARCH_2_STEPS_PIVOT_FILTER = 'citycode'
     config.SEARCH_2_STEPS_PIVOT_REWRITE = 'name'
@@ -51,6 +53,7 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
     join_value = threshold = results = None
 
     # Run step 1 query
+    # Query1 = "postalcode city" => "33000 Bordeaux"
     results1 = search2steps_step1(config, query1, config.SEARCH_2_STEPS_STEP1_LIMIT, **filters)
     if len(queries2) == 0:
         ret = results1[0:limit]
@@ -62,6 +65,7 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
             params_steps_2 = []
             # Collect step 1 results
             for result in results1:
+                score_step_1 = result.score
                 query_step_1 = result.__getattr__(config.SEARCH_2_STEPS_PIVOT_REWRITE)
 
                 if config.SEARCH_2_STEPS_PIVOT_FILTER in filters and filters[config.SEARCH_2_STEPS_PIVOT_FILTER]:
@@ -72,22 +76,29 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
                     threshold = result.score
 
                 if join_value and threshold > config.SEARCH_2_STEPS_STEP1_THRESHOLD:
-                    params_steps_2.append((join_value, query_step_1))
+                    params_steps_2.append((join_value, query_step_1, score_step_1))
 
             # Make results uniq
             params_steps_2 = set(params_steps_2)
 
             # Run steps 2 queries
-            for join_value, query_step_1 in params_steps_2:
+            for join_value, query_step_1, score_step_1 in params_steps_2:
                 # Set step 2 query filter from step 1 result
                 filters_step_2 = filters.copy()
                 filters_step_2[config.SEARCH_2_STEPS_PIVOT_FILTER] = join_value
                 filters_step_2['type'] = config.SEARCH_2_STEPS_STEP2_TYPE
-                results_step_2 = multiple_search([q + ' ' + query_step_1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters_step_2)
+
+                # Mixup queries2 with results of step 1
+                # Queries2 = "37 Rue des Lilas"
+                # query_step_1 = "33400 Cannejan"
+                # "street result_postalcode_step1 result_city_step_1" => "37 Rue des Lilas 33400 Cannejan"
+                results_step_2 = multiple_search([q + ' ' + query_step_1 for q in queries2], limit=config.SEARCH_2_STEPS_STEP2_LIMIT, autocomplete=autocomplete, **filters_step_2)
                 append = False
                 if results_step_2:
                     for result_step_2 in results_step_2:
                         if result_step_2.score > config.SEARCH_2_STEPS_STEP2_THRESHOLD:
+                            # Lower step 2 score depending on score in step1
+                            result_step_2.score = 2 * (math.cos(math.sqrt(score_step_1) - 1) - 0.5) * result_step_2.score
                             append = True
                             ret.append(result_step_2)
                 if not append:
@@ -97,36 +108,46 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
                     if result.score > config.SEARCH_2_STEPS_STEP2_THRESHOLD:
                         ret.append(result)
 
+        # Full text search to get some kind of fallback results
         results_full = multiple_search([q + ' ' + query1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters)
 
     for result in results_full:
-        # Lower the score
-        result.score *= config.SEARCH_2_STEPS_STEP2_PENALITY_MULTIPLIER
+        # for each previous results
+        # lower the score if not found in 2 steps search
+        exist = [retValue for retValue in ret if retValue.id == result.id]
+        if len(exist) == 0:
+            result.score *= config.SEARCH_2_STEPS_STEP2_PENALITY_MULTIPLIER
 
         ret.append(result)
 
     if ret:
-        # Sort and limit results for all queries
-        ret = sorted(ret, key=lambda k: k.score, reverse=True)[0:limit]
-        # Make result uniq
-        ids = []
-        uniq = []
-        for e in ret:
-            if e.id not in ids:
-                uniq.append(e)
-                ids.append(e.id)
-        return uniq
+        # Sort results to make highest scores appears first
+        # Then make result uniq in case of duplicates
+        return makeUniq(sorted(ret, key=lambda k: k.score, reverse=True)[0:limit])
     else:
         return results1[0:limit]
 
+def makeUniq(duplicates):
+    uniq = []
+    ids = []
+    for value in duplicates:
+        if value.id not in ids:
+            uniq.append(value)
+            ids.append(value.id)
+    return uniq
 
 class Search2Steps(View):
 
     def on_get(self, req, resp, **kwargs):
+        # Separate parameters get from request
         q0 = req.get_param('q0')
         q0 = q0.split('|') if q0 and len(q0.strip()) > 0 else []
         q = req.get_param('q')
         q = q.split('|') if q and len(q.strip()) > 0 else []
+
+        # q = "postalcode city" => "33000 Bordeaux"
+        # q0 = "street" => "37 Rue des lilas"
+
         if len(q) == 0 and len(q0) == 0:
             raise falcon.HTTPBadRequest('Missing query', 'Missing query')
         limit = req.get_param_as_int('limit') or 5  # use config
@@ -143,9 +164,14 @@ class Search2Steps(View):
 
         try:
             if len(q0) == 0:
+                # Full text query
+                # => "37 Rue des lilas 33000 bordeaux"
                 results = multiple_search(q, limit=limit, autocomplete=False, lat=lat, lon=lon, **filters)
                 query = '|'.join(q)
             else:
+                # 2Steps query
+                # => q0 = "33000 Bordeaux"
+                # => q = "37 Rue des lilas"
                 results = search2steps(self.config, q0[0], q, autocomplete=autocomplete, limit=limit, lat=lat, lon=lon, **filters)
                 query = '|'.join(q0) + ' ' + ('|').join(q)
         except EntityTooLarge as e:
@@ -189,9 +215,14 @@ class CSVSearch2steps(BaseCSV):
 
         try:
             if len(q0) == 0:
+                # Full text query
+                # => "37 Rue des lilas 33000 bordeaux"
                 results = multiple_search(q, autocomplete=False, limit=1, **filters)
                 query = '|'.join(q)
             else:
+                # 2Steps query
+                # => q0 = "33000 Bordeaux"
+                # => q = "37 Rue des lilas"
                 results = search2steps(self.config, q0[0], q, autocomplete=False, limit=1, **filters)
                 query = '|'.join(q0) + ' ' + ('|').join(q)
         except EntityTooLarge as e:
