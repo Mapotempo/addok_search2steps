@@ -20,7 +20,7 @@ def register_http_endpoint(api):
 
 
 def preconfigure(config):
-    config.SEARCH_2_STEPS_STEP1_TYPES = ['municipality']
+    config.SEARCH_2_STEPS_STEP1_TYPES = ['municipality', 'locality']
     config.SEARCH_2_STEPS_STEP1_THRESHOLD = 0.2
     config.SEARCH_2_STEPS_STEP1_LIMIT = 10
     config.SEARCH_2_STEPS_STEP2_LIMIT = 10
@@ -31,7 +31,8 @@ def preconfigure(config):
     config.SEARCH_2_STEPS_STEP2_TYPE = 'housenumber'
     config.SEARCH_2_STEPS_STEP2_THRESHOLD = 0.2
     config.SEARCH_2_STEPS_STEP2_PENALITY_MULTIPLIER = 0.5
-
+    config.SEARCH_2_STEPS_FULL_TEXT_PENALITY_MULTIPLIER = 0.7
+    
 
 def multiple_search(queries, **args):
     if len(queries) > 0:
@@ -112,11 +113,10 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
         results_full = multiple_search([q + ' ' + query1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters)
 
     for result in results_full:
-        # for each previous results
-        # lower the score if not found in 2 steps search
+        # lower score of full text search results if not in step 2
         exist = [retValue for retValue in ret if retValue.id == result.id]
         if len(exist) == 0:
-            result.score *= config.SEARCH_2_STEPS_STEP2_PENALITY_MULTIPLIER
+            result.score *= config.SEARCH_2_STEPS_FULL_TEXT_PENALITY_MULTIPLIER
 
         ret.append(result)
 
