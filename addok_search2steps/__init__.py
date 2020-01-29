@@ -26,7 +26,7 @@ def preconfigure(config):
     config.SEARCH_2_STEPS_STEP2_LIMIT = 10
 
     config.SEARCH_2_STEPS_PIVOT_FILTER = 'citycode'
-    config.SEARCH_2_STEPS_PIVOT_REWRITE = 'name'
+    config.SEARCH_2_STEPS_PIVOT_REWRITE = ['postcode', 'name']
 
     config.SEARCH_2_STEPS_STEP2_TYPE = 'housenumber'
     config.SEARCH_2_STEPS_STEP2_THRESHOLD = 0.2
@@ -68,6 +68,8 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
             for result in results1:
                 score_step_1 = result.score
                 query_step_1 = result.__getattr__(config.SEARCH_2_STEPS_PIVOT_REWRITE)
+
+                query_step_1 = " ".join([ str(result.__getattr__(pivot)) for pivot in config.SEARCH_2_STEPS_PIVOT_REWRITE ])
 
                 if config.SEARCH_2_STEPS_PIVOT_FILTER in filters and filters[config.SEARCH_2_STEPS_PIVOT_FILTER]:
                     join_value = filters[config.SEARCH_2_STEPS_PIVOT_FILTER]
