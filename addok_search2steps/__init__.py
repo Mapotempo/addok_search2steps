@@ -88,13 +88,13 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
             for join_value, query_step_1, score_step_1 in params_steps_2:
                 # Set step 2 query filter from step 1 result
                 filters_step_2 = filters.copy()
-                filters_step_2[config.SEARCH_2_STEPS_PIVOT_FILTER] = join_value
+                filters_step_2[config.SEARCH_2_STEPS_PIVOT_FILTER] = join_value # SEARCH_2_STEPS_PIVOT_FILTER = citycode
                 filters_step_2['type'] = config.SEARCH_2_STEPS_STEP2_TYPE
 
                 # Mixup queries2 with results of step 1
-                # Queries2 = "37 Rue des Lilas"
-                # query_step_1 = "33400 Cannejan"
-                # "street result_postalcode_step1 result_city_step_1" => "37 Rue des Lilas 33400 Cannejan"
+                # Queries2 = "105 boulevard Mac Donald"
+                # query_step_1 = "75019 Paris"
+                # "street result_postalcode_step1 result_city_step_1" => "105 Boulevard mac Donald 75019 Paris"
                 results_step_2 = multiple_search([q + ' ' + query_step_1 for q in queries2], limit=config.SEARCH_2_STEPS_STEP2_LIMIT, autocomplete=autocomplete, **filters_step_2)
                 append = False
                 if results_step_2:
