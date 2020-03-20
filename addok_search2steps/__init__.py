@@ -67,7 +67,6 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
             # Collect step 1 results
             for result in results1:
                 score_step_1 = result.score
-                query_step_1 = result.__getattr__(config.SEARCH_2_STEPS_PIVOT_REWRITE)
 
                 query_step_1 = " ".join([ str(result.__getattr__(pivot)) for pivot in config.SEARCH_2_STEPS_PIVOT_REWRITE ])
 
