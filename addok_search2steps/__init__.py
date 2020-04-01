@@ -244,14 +244,14 @@ class CSVSearch2steps(BaseCSV):
                 # Full text query
                 # => "37 Rue des lilas 33000 bordeaux"
                 results = multiple_search(q, autocomplete=False, limit=1, **filters)
-                trace("CSV FULL TEXT results", result)
+                trace("CSV FULL TEXT results", results)
                 query = '|'.join(q)
             else:
-                trace("CSV 2STEP results", result)
                 # 2Steps query
                 # => q0 = "33000 Bordeaux"
                 # => q = "37 Rue des lilas"
                 results = search2steps(self.config, q0[0], q, autocomplete=False, limit=1, **filters)
+                trace("CSV 2STEP results", results)
                 query = '|'.join(q0) + ' ' + ('|').join(q)
         except EntityTooLarge as e:
             raise falcon.HTTPRequestEntityTooLarge(str(e))
