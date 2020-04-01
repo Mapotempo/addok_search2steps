@@ -10,6 +10,9 @@ import itertools
 
 import math
 
+import pprint
+pp = pprint.PrettyPrinter(indent=4)
+
 def register_http_middleware(middlewares):
     middlewares.append(MultipartMiddleware())
 
@@ -32,10 +35,10 @@ def preconfigure(config):
     config.SEARCH_2_STEPS_STEP2_THRESHOLD = 0.2
     config.SEARCH_2_STEPS_STEP2_PENALITY_MULTIPLIER = 0.5
     config.SEARCH_2_STEPS_FULL_TEXT_PENALITY_MULTIPLIER = 0.7
-    
 
 def multiple_search(queries, **args):
     if len(queries) > 0:
+        # print("multiple_search query: " + str(queries), flush=True)
         return max([search(query, **args) for query in queries], key=lambda x: x and len(x) > 0 and x[0].score or 0)
     else:
         return []
@@ -48,6 +51,10 @@ def search2steps_step1(config, query1, limit, **filters):
         ret += search(query1, limit=limit, autocomplete=False, **filters_step_1)
     return sorted(ret, key=lambda k: k.score, reverse=True)[0:limit]
 
+def trace(label, elem=None):
+    txt = (label, label + str(elem))[elem != None]
+    print(txt, flush=True)
+
 
 def search2steps(config, query1, queries2, autocomplete, limit, **filters):
     # Fetch the join value
@@ -55,11 +62,21 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
 
     # Run step 1 query
     # Query1 = "postalcode city" => "33000 Bordeaux"
+    trace("###### FIRST STEPS ##########")
+    trace("Query1: ", query1)
+    trace("Query2: ", queries2)
+    trace("Limit: ", config.SEARCH_2_STEPS_STEP1_LIMIT)
+    trace("Filters: ", filters)
     results1 = search2steps_step1(config, query1, config.SEARCH_2_STEPS_STEP1_LIMIT, **filters)
+    trace("Ret: ")
+    pp.pprint(results1)
+    trace("###### END ##########")
     if len(queries2) == 0:
+        trace("###### FIRST STEPS QUERIES2 ##########")
         ret = results1[0:limit]
         results_full = search(query1, limit=limit, autocomplete=autocomplete, **filters)
-
+        trace("RESULT_FULL: ", results_full)
+        trace("###### END ##########")
     else:
         ret = []
         if results1:
@@ -82,6 +99,7 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
 
             # Make results uniq
             params_steps_2 = set(params_steps_2)
+            trace("PARAMS_STEPS_2", params_steps_2)
 
             # Run steps 2 queries
             for join_value, query_step_1, score_step_1 in params_steps_2:
@@ -111,7 +129,11 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
                         ret.append(result)
 
         # Full text search to get some kind of fallback results
+        trace("###### RESULTS FULL")
+        trace("Filter: ", filters)
         results_full = multiple_search([q + ' ' + query1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters)
+        trace("Results: ")
+        pp.pprint(results_full)
 
     for result in results_full:
         # lower score of full text search results if not in step 2
@@ -164,9 +186,12 @@ class Search2Steps(View):
         filters = self.match_filters(req)
 
         try:
+            trace("Q", q)
+            trace("Q0", q0)
             if len(q0) == 0:
                 # Full text query
                 # => "37 Rue des lilas 33000 bordeaux"
+                trace("FULL TEXT")
                 results = multiple_search(q, limit=limit, autocomplete=False, lat=lat, lon=lon, **filters)
                 query = '|'.join(q)
             else:
@@ -219,8 +244,10 @@ class CSVSearch2steps(BaseCSV):
                 # Full text query
                 # => "37 Rue des lilas 33000 bordeaux"
                 results = multiple_search(q, autocomplete=False, limit=1, **filters)
+                trace("CSV FULL TEXT results", result)
                 query = '|'.join(q)
             else:
+                trace("CSV 2STEP results", result)
                 # 2Steps query
                 # => q0 = "33000 Bordeaux"
                 # => q = "37 Rue des lilas"
