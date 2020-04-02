@@ -132,8 +132,7 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
         trace("###### RESULTS FULL")
         trace("Filter: ", filters)
         results_full = multiple_search([q + ' ' + query1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters)
-        trace("Results: ")
-        pp.pprint(results_full)
+        trace("Results: ", results_full)
 
     for result in results_full:
         # lower score of full text search results if not in step 2
