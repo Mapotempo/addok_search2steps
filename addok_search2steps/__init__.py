@@ -22,7 +22,7 @@ def register_http_endpoint(api):
 def preconfigure(config):
     config.SEARCH_2_STEPS_STEP1_TYPES = ['municipality', 'locality']
     config.SEARCH_2_STEPS_STEP1_THRESHOLD = 0.2
-    config.SEARCH_2_STEPS_STEP1_LIMIT = 5
+    config.SEARCH_2_STEPS_STEP1_LIMIT = 10
     config.SEARCH_2_STEPS_STEP2_LIMIT = 10
 
     config.SEARCH_2_STEPS_PIVOT_FILTER = 'citycode'
