@@ -22,7 +22,7 @@ def register_http_endpoint(api):
 def preconfigure(config):
     config.SEARCH_2_STEPS_STEP1_TYPES = ['municipality', 'locality']
     config.SEARCH_2_STEPS_STEP1_THRESHOLD = 0.2
-    config.SEARCH_2_STEPS_STEP1_LIMIT = 5
+    config.SEARCH_2_STEPS_STEP1_LIMIT = 10
     config.SEARCH_2_STEPS_STEP2_LIMIT = 10
 
     config.SEARCH_2_STEPS_PIVOT_FILTER = 'citycode'
@@ -32,7 +32,6 @@ def preconfigure(config):
     config.SEARCH_2_STEPS_STEP2_THRESHOLD = 0.2
     config.SEARCH_2_STEPS_STEP2_PENALITY_MULTIPLIER = 0.5
     config.SEARCH_2_STEPS_FULL_TEXT_PENALITY_MULTIPLIER = 0.7
-    
 
 def multiple_search(queries, **args):
     if len(queries) > 0:
@@ -46,8 +45,7 @@ def search2steps_step1(config, query1, limit, **filters):
     for type in config.SEARCH_2_STEPS_STEP1_TYPES:
         filters_step_1['type'] = type
         ret += search(query1, limit=limit, autocomplete=False, **filters_step_1)
-    return sorted(ret, key=lambda k: k.score, reverse=True)[0:limit]
-
+    return ret
 
 def search2steps(config, query1, queries2, autocomplete, limit, **filters):
     # Fetch the join value
