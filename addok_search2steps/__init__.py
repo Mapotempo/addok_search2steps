@@ -7,6 +7,7 @@ from addok.helpers.text import EntityTooLarge
 
 from addok_csv import View, BaseCSV, log_query, log_notfound
 import itertools
+import hashlib
 
 import math
 
@@ -122,7 +123,7 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
     if ret:
         # Sort results to make highest scores appears first
         # Then make result uniq in case of duplicates
-        return makeUniq(sorted(ret, key=lambda k: k.score, reverse=True)[0:limit])
+        return sorted(makeUniq(ret), key=lambda k: k.score)
     else:
         return results1[0:limit]
 
@@ -130,10 +131,23 @@ def makeUniq(duplicates):
     uniq = []
     ids = []
     for value in duplicates:
+        currentId = value.id if value.id else generateMD5Id(value)
         if value.id not in ids:
             uniq.append(value)
-            ids.append(value.id)
+            ids.append(currentId)
     return uniq
+
+def generateMD5Id(value):
+    encodedValue = (
+        value.city
+        + value.postcode
+        + value.street
+        + str(value.housenumber)
+        + value.type
+        + str(value.score)
+    ).encode()
+
+    return hashlib.md5(encodedValue).digest()
 
 class Search2Steps(View):
 
