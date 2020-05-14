@@ -19,7 +19,6 @@ def register_http_endpoint(api):
     api.add_route('/search2steps', Search2Steps())
     api.add_route('/search2steps/csv', CSVSearch2steps())
 
-
 def preconfigure(config):
     config.SEARCH_2_STEPS_STEP1_TYPES = ['municipality', 'locality']
     config.SEARCH_2_STEPS_STEP1_THRESHOLD = 0.2
@@ -58,7 +57,6 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
     if len(queries2) == 0:
         ret = results1[0:limit]
         results_full = search(query1, limit=limit, autocomplete=autocomplete, **filters)
-
     else:
         ret = []
         if results1:
@@ -113,8 +111,9 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
         results_full = multiple_search([q + ' ' + query1 for q in queries2], limit=limit, autocomplete=autocomplete, **filters)
 
     for result in results_full:
+        result_id = get_id(result)
         # lower score of full text search results if not in step 2
-        exist = [retValue for retValue in ret if retValue.id == result.id]
+        exist = [ret_value for ret_value in ret if get_id(ret_value) == result_id]
         if len(exist) == 0:
             result.score *= config.SEARCH_2_STEPS_FULL_TEXT_PENALITY_MULTIPLIER
 
@@ -123,19 +122,22 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
     if ret:
         # Sort results to make highest scores appears first
         # Then make result uniq in case of duplicates
-        return sorted(makeUniq(ret), key=lambda k: k.score)
+        return make_uniq(sorted(ret, key=lambda k: k.score, reverse=True))
     else:
         return results1[0:limit]
 
-def makeUniq(duplicates):
+def make_uniq(duplicates):
     uniq = []
     ids = []
     for value in duplicates:
-        currentId = value.id if value.id else generateMD5Id(value)
+        currentId = get_id(value)
         if value.id not in ids:
             uniq.append(value)
             ids.append(currentId)
     return uniq
+
+def get_id(value):
+    return value.id if value.id else generateMD5Id(value)
 
 def generateMD5Id(value):
     encodedValue = (
@@ -146,7 +148,6 @@ def generateMD5Id(value):
         + value.type
         + str(value.score)
     ).encode()
-
     return hashlib.md5(encodedValue).digest()
 
 class Search2Steps(View):
