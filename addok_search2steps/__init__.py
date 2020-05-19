@@ -54,6 +54,7 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
     # Run step 1 query
     # Query1 = "postalcode city" => "33000 Bordeaux"
     results1 = search2steps_step1(config, query1, config.SEARCH_2_STEPS_STEP1_LIMIT, **filters)
+    second_step = False
     if len(queries2) == 0:
         ret = results1[0:limit]
         results_full = search(query1, limit=limit, autocomplete=autocomplete, **filters)
@@ -75,6 +76,7 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
                     threshold = result.score
 
                 if join_value and threshold > config.SEARCH_2_STEPS_STEP1_THRESHOLD:
+                    second_step = True
                     params_steps_2.append((join_value, query_step_1, score_step_1))
 
             # Make results uniq
@@ -114,7 +116,7 @@ def search2steps(config, query1, queries2, autocomplete, limit, **filters):
         result_id = get_id(result)
         # lower score of full text search results if not in step 2
         exist = [ret_value for ret_value in ret if get_id(ret_value) == result_id]
-        if len(exist) == 0:
+        if second_step and len(exist) == 0:
             result.score *= config.SEARCH_2_STEPS_FULL_TEXT_PENALITY_MULTIPLIER
 
         ret.append(result)
